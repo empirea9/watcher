@@ -875,8 +875,8 @@ class PhysicsSimulator:
                     mouse_pos = pygame.mouse.get_pos()
                     
                     # Check if clicking on timeline marker (priority check)
-                    if event.button == 1 and not self.is_simulating:
-                        if self.is_mouse_over_timeline_marker(mouse_pos):
+                    if event.button == 1:
+                        if not self.is_simulating and self.is_mouse_over_timeline_marker(mouse_pos):
                             self.timeline_scrubbing = True
                         elif mouse_pos[0] < self.width - 320:  # Not on GUI panel
                             self.camera_rotating = True
