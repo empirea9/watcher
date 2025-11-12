@@ -63,6 +63,10 @@ class Object3D:
         self.trajectory_data = []  # Stores (position, velocity, time)
         self.simulation_time = 0.0
         
+        # Velocity components for display
+        self.h_velocity_magnitude = 0.0
+        self.v_velocity_magnitude = 0.0
+        
         # Drag state
         self.is_being_dragged = False
         
@@ -191,10 +195,10 @@ class Object3D:
         
         # Horizontal velocity (XZ plane)
         v_horizontal = np.array([self.velocity[0], 0, self.velocity[2]])
-        h_mag = np.linalg.norm(v_horizontal)
-        if h_mag > 0.1:
-            h_dir = v_horizontal / h_mag
-            h_length = h_mag * arrow_length_scale
+        self.h_velocity_magnitude = np.linalg.norm(v_horizontal)
+        if self.h_velocity_magnitude > 0.1:
+            h_dir = v_horizontal / self.h_velocity_magnitude
+            h_length = self.h_velocity_magnitude * arrow_length_scale
             
             glColor4f(1.0, 0.8, 0.2, 0.7)  # Yellow-ish, lighter
             glLineWidth(2.5)
@@ -207,8 +211,8 @@ class Object3D:
             self._draw_arrow_head(h_dir[0] * h_length, 0, h_dir[2] * h_length, h_dir, 0.2)
         
         # Vertical velocity (Y axis)
-        v_mag = abs(self.velocity[1])
-        if v_mag > 0.1:
+        self.v_velocity_magnitude = abs(self.velocity[1])
+        if self.v_velocity_magnitude > 0.1:
             v_length = self.velocity[1] * arrow_length_scale
             v_dir = 1 if self.velocity[1] > 0 else -1
             
@@ -688,6 +692,41 @@ class PhysicsSimulator:
                 except ValueError:
                     pass
     
+    def draw_velocity_labels(self):
+        """Draw velocity component labels on the object"""
+        if self.current_object.is_being_dragged or np.linalg.norm(self.current_object.velocity) < 0.1:
+            return
+        
+        # Get 3D position of object
+        obj_pos = self.current_object.position
+        
+        # Project 3D position to 2D screen coordinates
+        modelview = glGetDoublev(GL_MODELVIEW_MATRIX)
+        projection = glGetDoublev(GL_PROJECTION_MATRIX)
+        viewport = glGetIntegerv(GL_VIEWPORT)
+        
+        try:
+            from OpenGL.GLU import gluProject
+            screen_coords = gluProject(obj_pos[0], obj_pos[1], obj_pos[2], modelview, projection, viewport)
+            screen_x = int(screen_coords[0])
+            screen_y = int(self.height - screen_coords[1])  # Flip Y coordinate
+            
+            # Draw labels near the object
+            font = pygame.font.Font(None, 20)
+            
+            # Horizontal velocity label (yellow)
+            if hasattr(self.current_object, 'h_velocity_magnitude') and self.current_object.h_velocity_magnitude > 0.1:
+                h_text = font.render(f"vₕ={self.current_object.h_velocity_magnitude:.2f} m/s", True, (255, 200, 50))
+                self.gui_surface.blit(h_text, (screen_x + 15, screen_y - 30))
+            
+            # Vertical velocity label (green)
+            if hasattr(self.current_object, 'v_velocity_magnitude') and self.current_object.v_velocity_magnitude > 0.1:
+                v_text = font.render(f"vᵥ={self.current_object.v_velocity_magnitude:.2f} m/s", True, (50, 255, 100))
+                self.gui_surface.blit(v_text, (screen_x + 15, screen_y - 10))
+                
+        except Exception:
+            pass  # Skip if projection fails
+    
     def draw_timeline(self):
         """Draw timeline UI at the bottom of the screen to scrub through trajectory"""
         if len(self.current_object.trajectory_data) < 2:
@@ -726,8 +765,11 @@ class PhysicsSimulator:
             if max_time > 0:
                 marker_x = timeline_x + int((current_time / max_time) * timeline_width)
                 marker_y = timeline_y
+                # Draw draggable marker handle (larger circle)
+                draw.circle(self.gui_surface, (255, 255, 0), (marker_x, marker_y + timeline_height // 2), 8)
+                draw.circle(self.gui_surface, (200, 200, 0), (marker_x, marker_y + timeline_height // 2), 6)
                 # Draw vertical line marker
-                draw.line(self.gui_surface, (255, 255, 0), (marker_x, marker_y), (marker_x, marker_y + timeline_height), 3)
+                draw.line(self.gui_surface, (255, 255, 0, 128), (marker_x, marker_y), (marker_x, marker_y + timeline_height), 2)
                 
                 # Find closest trajectory point for velocity display
                 closest_idx = 0
@@ -741,11 +783,73 @@ class PhysicsSimulator:
                 if closest_idx < len(self.current_object.trajectory_data):
                     _, vel, _ = self.current_object.trajectory_data[closest_idx]
                     vel_mag = np.linalg.norm(vel)
+                    v_horizontal = np.linalg.norm([vel[0], 0, vel[2]])
+                    v_vertical = abs(vel[1])
                     
-                    # Display velocity text
+                    # Display velocity text with components
                     font = pygame.font.Font(None, 24)
-                    vel_text = font.render(f"v={vel_mag:.2f} m/s  t={current_time:.2f}s", True, (255, 255, 255))
+                    vel_text = font.render(f"v={vel_mag:.2f} m/s  vₕ={v_horizontal:.2f} m/s  vᵥ={v_vertical:.2f} m/s  t={current_time:.2f}s", True, (255, 255, 255))
                     self.gui_surface.blit(vel_text, (timeline_x + 10, timeline_y + 5))
+    
+    def is_mouse_over_timeline_marker(self, mouse_pos):
+        """Check if mouse is over the timeline marker"""
+        if len(self.current_object.trajectory_data) < 2:
+            return False
+        
+        timeline_height = 60
+        timeline_y = self.height - timeline_height
+        timeline_margin = 20
+        timeline_width = self.width - 2 * timeline_margin
+        timeline_x = timeline_margin
+        
+        max_time = self.current_object.trajectory_data[-1][2]
+        current_time = self.current_object.simulation_time
+        
+        if max_time > 0:
+            marker_x = timeline_x + int((current_time / max_time) * timeline_width)
+            marker_y = timeline_y + timeline_height // 2
+            
+            # Check if mouse is within 10 pixels of marker
+            dx = mouse_pos[0] - marker_x
+            dy = mouse_pos[1] - marker_y
+            distance = math.sqrt(dx*dx + dy*dy)
+            return distance < 10
+        
+        return False
+    
+    def update_timeline_from_mouse(self, mouse_pos):
+        """Update simulation time based on mouse position on timeline"""
+        if len(self.current_object.trajectory_data) < 2:
+            return
+        
+        timeline_height = 60
+        timeline_y = self.height - timeline_height
+        timeline_margin = 20
+        timeline_width = self.width - 2 * timeline_margin
+        timeline_x = timeline_margin
+        
+        # Clamp mouse position to timeline bounds
+        relative_x = max(0, min(timeline_width, mouse_pos[0] - timeline_x))
+        timeline_position = relative_x / timeline_width
+        
+        # Calculate new time
+        max_time = self.current_object.trajectory_data[-1][2]
+        new_time = timeline_position * max_time
+        
+        # Find closest trajectory point and update object state
+        closest_idx = 0
+        closest_dist = float('inf')
+        for i, (pos, vel, time) in enumerate(self.current_object.trajectory_data):
+            dist = abs(time - new_time)
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_idx = i
+        
+        if closest_idx < len(self.current_object.trajectory_data):
+            pos, vel, time = self.current_object.trajectory_data[closest_idx]
+            self.current_object.position = pos.copy()
+            self.current_object.velocity = vel.copy()
+            self.current_object.simulation_time = time
                 
     def run(self):
         """Main simulation loop"""
@@ -764,12 +868,16 @@ class PhysicsSimulator:
                         
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     mouse_pos = pygame.mouse.get_pos()
-                    # Check if click is on GUI
-                    if mouse_pos[0] < self.width - 320:  # Not on GUI panel
-                        if event.button == 1:  # Left click - rotate camera
+                    
+                    # Check if clicking on timeline marker (priority check)
+                    if event.button == 1 and not self.is_simulating:
+                        if self.is_mouse_over_timeline_marker(mouse_pos):
+                            self.timeline_scrubbing = True
+                        elif mouse_pos[0] < self.width - 320:  # Not on GUI panel
                             self.camera_rotating = True
                             self.last_mouse_pos = mouse_pos
-                        elif event.button == 3:  # Right click - drag object
+                    elif mouse_pos[0] < self.width - 320:  # Not on GUI panel
+                        if event.button == 3:  # Right click - drag object
                             if self.is_mouse_over_object(mouse_pos) and not self.is_simulating:
                                 self.dragging_object = True
                                 self.current_object.is_being_dragged = True
@@ -784,12 +892,16 @@ class PhysicsSimulator:
                 elif event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1:
                         self.camera_rotating = False
+                        self.timeline_scrubbing = False
                     elif event.button == 3:
                         self.dragging_object = False
                         self.current_object.is_being_dragged = False
                         
                 elif event.type == pygame.MOUSEMOTION:
-                    if self.camera_rotating:
+                    if self.timeline_scrubbing:
+                        mouse_pos = pygame.mouse.get_pos()
+                        self.update_timeline_from_mouse(mouse_pos)
+                    elif self.camera_rotating:
                         mouse_pos = pygame.mouse.get_pos()
                         dx = mouse_pos[0] - self.last_mouse_pos[0]
                         dy = mouse_pos[1] - self.last_mouse_pos[1]
@@ -868,6 +980,9 @@ class PhysicsSimulator:
             
             # Draw GUI to the surface
             self.gui_manager.draw_ui(self.gui_surface)
+            
+            # Draw velocity component labels on object
+            self.draw_velocity_labels()
             
             # Draw timeline overlay
             self.draw_timeline()
