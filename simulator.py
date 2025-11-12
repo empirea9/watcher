@@ -239,8 +239,13 @@ class PhysicsSimulator:
         pygame.init()
         self.width = width
         self.height = height
+        
+        # Create OpenGL display
         self.display = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
         pygame.display.set_caption("3D Projectile Motion Simulator - Enhanced")
+        
+        # Create a surface for GUI rendering (pygame_gui needs a regular pygame surface)
+        self.gui_surface = pygame.Surface((width, height), pygame.SRCALPHA)
         
         # OpenGL setup
         glEnable(GL_DEPTH_TEST)
@@ -255,7 +260,7 @@ class PhysicsSimulator:
         # Camera
         self.camera = Camera()
         
-        # GUI Manager
+        # GUI Manager - use the gui_surface instead of display
         self.gui_manager = pygame_gui.UIManager((width, height), 'theme.json')
         
         # Simulation state
@@ -696,21 +701,69 @@ class PhysicsSimulator:
             # Update GUI
             self.gui_manager.update(dt)
             
-            # Render 3D scene
+            # Render 3D scene with OpenGL
             glClearColor(*COLORS['background'], 1)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             
             glLoadIdentity()
             self.camera.apply()
             
-            # Draw scene
+            # Draw 3D scene
             self.draw_infinite_grid()
             self.draw_axes()
             self.current_object.draw()
             self.current_object.draw_trajectory()
             
-            # Draw GUI overlay
-            self.gui_manager.draw_ui(self.display)
+            # Now render GUI on top
+            # First, clear the GUI surface
+            self.gui_surface.fill((0, 0, 0, 0))  # Transparent
+            
+            # Draw GUI to the surface
+            self.gui_manager.draw_ui(self.gui_surface)
+            
+            # Convert pygame surface to OpenGL texture and draw it
+            # Switch to 2D orthographic projection
+            glMatrixMode(GL_PROJECTION)
+            glPushMatrix()
+            glLoadIdentity()
+            glOrtho(0, self.width, self.height, 0, -1, 1)
+            glMatrixMode(GL_MODELVIEW)
+            glPushMatrix()
+            glLoadIdentity()
+            
+            # Disable depth test for 2D overlay
+            glDisable(GL_DEPTH_TEST)
+            glEnable(GL_BLEND)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+            
+            # Convert surface to texture
+            texture_data = pygame.image.tostring(self.gui_surface, 'RGBA', True)
+            glEnable(GL_TEXTURE_2D)
+            texture_id = glGenTextures(1)
+            glBindTexture(GL_TEXTURE_2D, texture_id)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self.width, self.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data)
+            
+            # Draw textured quad
+            glColor4f(1, 1, 1, 1)
+            glBegin(GL_QUADS)
+            glTexCoord2f(0, 0); glVertex2f(0, 0)
+            glTexCoord2f(1, 0); glVertex2f(self.width, 0)
+            glTexCoord2f(1, 1); glVertex2f(self.width, self.height)
+            glTexCoord2f(0, 1); glVertex2f(0, self.height)
+            glEnd()
+            
+            # Cleanup
+            glDeleteTextures([texture_id])
+            glDisable(GL_TEXTURE_2D)
+            
+            # Restore 3D state
+            glEnable(GL_DEPTH_TEST)
+            glMatrixMode(GL_PROJECTION)
+            glPopMatrix()
+            glMatrixMode(GL_MODELVIEW)
+            glPopMatrix()
             
             pygame.display.flip()
             
