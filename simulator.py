@@ -1,6 +1,6 @@
 """
 3D Projectile Motion Simulator
-Main application module
+Enhanced version with GUI controls and drag functionality
 """
 
 import pygame
@@ -9,6 +9,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 import numpy as np
 import math
+import pygame_gui
 
 # Color scheme - dark aesthetic with black, white, gray, blue, and yellow
 COLORS = {
@@ -16,6 +17,7 @@ COLORS = {
     'grid': (0.2, 0.2, 0.2),  # Dark gray
     'trajectory': (0.3, 0.6, 1.0),  # Blue
     'object': (0.9, 0.9, 0.9),  # Light gray/white
+    'object_dragging': (1.0, 0.9, 0.2),  # Yellow when dragging
     'text_bg': (0.1, 0.1, 0.1),  # Dark background for text
     'text': (1.0, 1.0, 1.0),  # White text
     'highlight': (1.0, 0.9, 0.2),  # Yellow
@@ -59,6 +61,9 @@ class Object3D:
         # Trajectory tracking
         self.trajectory = []
         
+        # Drag state
+        self.is_being_dragged = False
+        
     def reset(self, position):
         """Reset object to initial position"""
         self.position = np.array(position, dtype=float)
@@ -82,6 +87,9 @@ class Object3D:
         
     def update(self, dt, gravity=-9.81):
         """Update physics simulation"""
+        if self.is_being_dragged:
+            return True
+            
         # Apply gravity
         self.velocity[1] += gravity * dt
         
@@ -108,7 +116,10 @@ class Object3D:
         glRotatef(self.rotation[1], 0, 1, 0)
         glRotatef(self.rotation[2], 0, 0, 1)
         
-        glColor3f(*COLORS['object'])
+        if self.is_being_dragged:
+            glColor3f(*COLORS['object_dragging'])
+        else:
+            glColor3f(*COLORS['object'])
         
         if self.shape == 'sphere':
             quadric = gluNewQuadric()
@@ -129,11 +140,6 @@ class Object3D:
         vertices = [
             [-size, -size, -size], [size, -size, -size], [size, size, -size], [-size, size, -size],
             [-size, -size, size], [size, -size, size], [size, size, size], [-size, size, size]
-        ]
-        edges = [
-            (0, 1), (1, 2), (2, 3), (3, 0),
-            (4, 5), (5, 6), (6, 7), (7, 4),
-            (0, 4), (1, 5), (2, 6), (3, 7)
         ]
         
         glBegin(GL_QUADS)
@@ -175,6 +181,7 @@ class Camera:
         self.yaw = -135.0
         self.pitch = -20.0
         self.distance = 15.0
+        self.speed = 0.3  # Increased default camera speed
         
     def update_position(self):
         """Update camera position based on yaw, pitch, and distance"""
@@ -203,26 +210,37 @@ class Camera:
     def zoom(self, delta):
         """Zoom camera in/out"""
         self.distance += delta
-        self.distance = max(2, min(50, self.distance))
+        self.distance = max(2, min(100, self.distance))
         self.update_position()
         
-    def pan(self, dx, dz):
-        """Pan camera target"""
+    def pan(self, forward, right):
+        """Pan camera target - fixed to use proper forward/right movement"""
         yaw_rad = math.radians(self.yaw)
-        self.target[0] += dx * math.cos(yaw_rad) - dz * math.sin(yaw_rad)
-        self.target[2] += dx * math.sin(yaw_rad) + dz * math.cos(yaw_rad)
+        
+        # Forward direction (based on yaw)
+        forward_x = math.cos(yaw_rad)
+        forward_z = math.sin(yaw_rad)
+        
+        # Right direction (perpendicular to forward)
+        right_x = -math.sin(yaw_rad)
+        right_z = math.cos(yaw_rad)
+        
+        # Apply movement with camera speed
+        self.target[0] += (forward * forward_x + right * right_x) * self.speed
+        self.target[2] += (forward * forward_z + right * right_z) * self.speed
+        
         self.update_position()
 
 
 class PhysicsSimulator:
-    """Main physics simulator application"""
+    """Main physics simulator application with GUI controls"""
     
-    def __init__(self, width=1280, height=720):
+    def __init__(self, width=1400, height=800):
         pygame.init()
         self.width = width
         self.height = height
         self.display = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
-        pygame.display.set_caption("3D Projectile Motion Simulator")
+        pygame.display.set_caption("3D Projectile Motion Simulator - Enhanced")
         
         # OpenGL setup
         glEnable(GL_DEPTH_TEST)
@@ -231,46 +249,175 @@ class PhysicsSimulator:
         
         # Projection
         glMatrixMode(GL_PROJECTION)
-        gluPerspective(45, (width / height), 0.1, 100.0)
+        gluPerspective(45, (width / height), 0.1, 500.0)  # Increased far plane for infinite grid
         glMatrixMode(GL_MODELVIEW)
         
         # Camera
         self.camera = Camera()
         
+        # GUI Manager
+        self.gui_manager = pygame_gui.UIManager((width, height), 'theme.json' if False else None)
+        
         # Simulation state
         self.current_object = Object3D('football')
         self.current_object.reset([0, 2, 0])
-        self.object_type_index = 0
         self.object_types = list(Object3D.OBJECTS.keys())
         
         self.is_simulating = False
-        self.launch_angle_h = 45.0  # Horizontal angle
-        self.launch_angle_v = 45.0  # Vertical angle
+        self.launch_angle_h = 45.0
+        self.launch_angle_v = 45.0
         self.launch_force = 20.0
         
-        # Mouse control
-        self.mouse_pressed = False
+        # Mouse control for camera
+        self.camera_rotating = False
         self.last_mouse_pos = (0, 0)
         
-        # Font for UI
-        self.font = pygame.font.Font(None, 24)
-        self.small_font = pygame.font.Font(None, 18)
+        # Object dragging
+        self.dragging_object = False
+        self.drag_plane_distance = 10.0
         
         # Clock
         self.clock = pygame.time.Clock()
         
-        # Cursor position in 3D space
-        self.cursor_3d_pos = np.array([0.0, 0.0, 0.0])
+        # Create GUI elements
+        self.create_gui()
         
-    def draw_grid(self, size=20, spacing=2):
-        """Draw ground grid"""
+    def create_gui(self):
+        """Create GUI controls"""
+        panel_width = 300
+        panel_x = self.width - panel_width - 10
+        y_offset = 10
+        element_height = 35
+        spacing = 10
+        
+        # Object selection dropdown
+        pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            text='Select Object:',
+            manager=self.gui_manager
+        )
+        y_offset += element_height + 5
+        
+        self.object_dropdown = pygame_gui.elements.UIDropDownMenu(
+            options_list=[Object3D.OBJECTS[k]['name'] for k in self.object_types],
+            starting_option='Football',
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            manager=self.gui_manager
+        )
+        y_offset += element_height + spacing
+        
+        # Horizontal angle input
+        pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            text='Horizontal Angle (0-360°):',
+            manager=self.gui_manager
+        )
+        y_offset += element_height + 5
+        
+        self.h_angle_entry = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            manager=self.gui_manager
+        )
+        self.h_angle_entry.set_text('45.0')
+        y_offset += element_height + spacing
+        
+        # Vertical angle input
+        pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            text='Vertical Angle (-90 to 90°):',
+            manager=self.gui_manager
+        )
+        y_offset += element_height + 5
+        
+        self.v_angle_entry = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            manager=self.gui_manager
+        )
+        self.v_angle_entry.set_text('45.0')
+        y_offset += element_height + spacing
+        
+        # Force input
+        pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            text='Launch Force (1-200 N):',
+            manager=self.gui_manager
+        )
+        y_offset += element_height + 5
+        
+        self.force_entry = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            manager=self.gui_manager
+        )
+        self.force_entry.set_text('20.0')
+        y_offset += element_height + spacing
+        
+        # Camera speed slider
+        pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            text='Camera Speed:',
+            manager=self.gui_manager
+        )
+        y_offset += element_height + 5
+        
+        self.camera_speed_slider = pygame_gui.elements.UIHorizontalSlider(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            start_value=0.3,
+            value_range=(0.1, 2.0),
+            manager=self.gui_manager
+        )
+        y_offset += element_height + spacing
+        
+        # Launch button
+        self.launch_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height + 5)),
+            text='LAUNCH',
+            manager=self.gui_manager
+        )
+        y_offset += element_height + spacing + 5
+        
+        # Reset button
+        self.reset_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height + 5)),
+            text='RESET',
+            manager=self.gui_manager
+        )
+        y_offset += element_height + spacing + 5
+        
+        # Info label
+        self.info_label = pygame_gui.elements.UITextBox(
+            html_text='<font color="#FFFFFF">Drag object with Right Click<br>Rotate camera with Left Click<br>Arrow keys to pan<br>Scroll to zoom</font>',
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, 100)),
+            manager=self.gui_manager
+        )
+        
+    def draw_infinite_grid(self):
+        """Draw infinite grid that follows camera"""
+        # Get camera target position
+        cx, cz = self.camera.target[0], self.camera.target[2]
+        
+        # Calculate grid bounds based on camera position
+        grid_size = 100  # Extended grid size
+        spacing = 2
+        
+        # Round to nearest grid unit
+        start_x = int((cx - grid_size) / spacing) * spacing
+        end_x = int((cx + grid_size) / spacing) * spacing
+        start_z = int((cz - grid_size) / spacing) * spacing
+        end_z = int((cz + grid_size) / spacing) * spacing
+        
         glColor3f(*COLORS['grid'])
         glBegin(GL_LINES)
-        for i in range(-size, size + 1, spacing):
-            glVertex3f(i, 0, -size)
-            glVertex3f(i, 0, size)
-            glVertex3f(-size, 0, i)
-            glVertex3f(size, 0, i)
+        
+        # Draw lines parallel to X axis
+        for z in range(start_z, end_z + 1, spacing):
+            glVertex3f(start_x, 0, z)
+            glVertex3f(end_x, 0, z)
+        
+        # Draw lines parallel to Z axis
+        for x in range(start_x, end_x + 1, spacing):
+            glVertex3f(x, 0, start_z)
+            glVertex3f(x, 0, end_z)
+        
         glEnd()
         
     def draw_axes(self, length=5):
@@ -300,189 +447,103 @@ class PhysicsSimulator:
         
         glLineWidth(1.0)
         
-    def get_cursor_3d_position(self, mouse_pos):
-        """Convert 2D mouse position to 3D world coordinates"""
-        # Get viewport, modelview, and projection matrices
+    def get_3d_pos_from_mouse(self, mouse_pos, distance):
+        """Convert 2D mouse position to 3D world coordinates at a specific distance"""
         viewport = glGetIntegerv(GL_VIEWPORT)
         modelview = glGetDoublev(GL_MODELVIEW_MATRIX)
         projection = glGetDoublev(GL_PROJECTION_MATRIX)
         
-        # Convert mouse coordinates to OpenGL coordinates
         x = mouse_pos[0]
         y = viewport[3] - mouse_pos[1]
         
-        # Read depth at mouse position
+        # Unproject at specific depth
+        pos_near = gluUnProject(x, y, 0.0, modelview, projection, viewport)
+        pos_far = gluUnProject(x, y, 1.0, modelview, projection, viewport)
+        
+        # Calculate ray direction
+        ray_dir = np.array([pos_far[0] - pos_near[0], 
+                           pos_far[1] - pos_near[1], 
+                           pos_far[2] - pos_near[2]])
+        ray_dir = ray_dir / np.linalg.norm(ray_dir)
+        
+        # Calculate intersection with plane at distance from camera
+        camera_pos = np.array(self.camera.position)
+        target_pos = camera_pos + ray_dir * distance
+        
+        return target_pos
+        
+    def is_mouse_over_object(self, mouse_pos):
+        """Check if mouse is over the 3D object"""
+        # Simple distance check in screen space
+        viewport = glGetIntegerv(GL_VIEWPORT)
+        modelview = glGetDoublev(GL_MODELVIEW_MATRIX)
+        projection = glGetDoublev(GL_PROJECTION_MATRIX)
+        
         try:
-            z = glReadPixels(x, y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT)[0][0]
-            # Unproject to get 3D coordinates
-            pos = gluUnProject(x, y, z, modelview, projection, viewport)
-            return np.array(pos)
+            # Project object position to screen
+            screen_pos = gluProject(
+                self.current_object.position[0],
+                self.current_object.position[1],
+                self.current_object.position[2],
+                modelview, projection, viewport
+            )
+            
+            # Check distance in screen space
+            dx = mouse_pos[0] - screen_pos[0]
+            dy = (viewport[3] - mouse_pos[1]) - screen_pos[1]
+            distance = math.sqrt(dx*dx + dy*dy)
+            
+            # Threshold based on object size and distance
+            threshold = 50  # pixels
+            return distance < threshold
         except:
-            return np.array([0.0, 0.0, 0.0])
+            return False
             
-    def draw_ui_text(self, text, x, y, color=(255, 255, 255), font=None):
-        """Draw text on screen using pygame surface"""
-        if font is None:
-            font = self.font
-            
-        text_surface = font.render(text, True, color)
-        text_data = pygame.image.tostring(text_surface, "RGBA", True)
-        
-        glMatrixMode(GL_PROJECTION)
-        glPushMatrix()
-        glLoadIdentity()
-        glOrtho(0, self.width, 0, self.height, -1, 1)
-        glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
-        glLoadIdentity()
-        
-        glDisable(GL_DEPTH_TEST)
-        glEnable(GL_TEXTURE_2D)
-        
-        texture = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, texture)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, text_surface.get_width(), text_surface.get_height(), 
-                     0, GL_RGBA, GL_UNSIGNED_BYTE, text_data)
-        
-        glColor3f(1, 1, 1)
-        glBegin(GL_QUADS)
-        glTexCoord2f(0, 0); glVertex2f(x, y)
-        glTexCoord2f(1, 0); glVertex2f(x + text_surface.get_width(), y)
-        glTexCoord2f(1, 1); glVertex2f(x + text_surface.get_width(), y + text_surface.get_height())
-        glTexCoord2f(0, 1); glVertex2f(x, y + text_surface.get_height())
-        glEnd()
-        
-        glDeleteTextures([texture])
-        glDisable(GL_TEXTURE_2D)
-        glEnable(GL_DEPTH_TEST)
-        
-        glPopMatrix()
-        glMatrixMode(GL_PROJECTION)
-        glPopMatrix()
-        glMatrixMode(GL_MODELVIEW)
-        
-    def draw_ui(self):
-        """Draw UI overlay with controls and information"""
-        # Draw panel background
-        glMatrixMode(GL_PROJECTION)
-        glPushMatrix()
-        glLoadIdentity()
-        glOrtho(0, self.width, 0, self.height, -1, 1)
-        glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
-        glLoadIdentity()
-        
-        glDisable(GL_DEPTH_TEST)
-        
-        # Right panel background
-        panel_width = 250
-        glColor4f(0.1, 0.1, 0.1, 0.85)
-        glBegin(GL_QUADS)
-        glVertex2f(self.width - panel_width, 0)
-        glVertex2f(self.width, 0)
-        glVertex2f(self.width, self.height)
-        glVertex2f(self.width - panel_width, self.height)
-        glEnd()
-        
-        glEnable(GL_DEPTH_TEST)
-        
-        glPopMatrix()
-        glMatrixMode(GL_PROJECTION)
-        glPopMatrix()
-        glMatrixMode(GL_MODELVIEW)
-        
-        # Draw text information
-        y_offset = self.height - 30
-        x_offset = self.width - 240
-        line_height = 25
-        
-        # Cursor position
-        self.draw_ui_text("Cursor Position:", x_offset, y_offset, (255, 255, 100))
-        y_offset -= line_height
-        self.draw_ui_text(f"X: {self.cursor_3d_pos[0]:.2f}", x_offset, y_offset, (255, 255, 255), self.small_font)
-        y_offset -= line_height
-        self.draw_ui_text(f"Y: {self.cursor_3d_pos[1]:.2f}", x_offset, y_offset, (255, 255, 255), self.small_font)
-        y_offset -= line_height
-        self.draw_ui_text(f"Z: {self.cursor_3d_pos[2]:.2f}", x_offset, y_offset, (255, 255, 255), self.small_font)
-        y_offset -= line_height * 1.5
-        
-        # Object info
-        self.draw_ui_text(f"Object: {self.current_object.name}", x_offset, y_offset, (255, 255, 100))
-        y_offset -= line_height
-        self.draw_ui_text(f"Mass: {self.current_object.mass:.3f} kg", x_offset, y_offset, (255, 255, 255), self.small_font)
-        y_offset -= line_height * 1.5
-        
-        # Launch parameters
-        self.draw_ui_text("Launch Settings:", x_offset, y_offset, (255, 255, 100))
-        y_offset -= line_height
-        self.draw_ui_text(f"H-Angle: {self.launch_angle_h:.1f}°", x_offset, y_offset, (255, 255, 255), self.small_font)
-        y_offset -= line_height
-        self.draw_ui_text(f"V-Angle: {self.launch_angle_v:.1f}°", x_offset, y_offset, (255, 255, 255), self.small_font)
-        y_offset -= line_height
-        self.draw_ui_text(f"Force: {self.launch_force:.1f} N", x_offset, y_offset, (255, 255, 255), self.small_font)
-        y_offset -= line_height * 1.5
-        
-        # Status
-        status = "SIMULATING" if self.is_simulating else "READY"
-        color = (100, 255, 100) if not self.is_simulating else (255, 255, 100)
-        self.draw_ui_text(f"Status: {status}", x_offset, y_offset, color)
-        y_offset -= line_height * 2
-        
-        # Controls
-        self.draw_ui_text("Controls:", x_offset, y_offset, (100, 200, 255))
-        y_offset -= line_height
-        controls = [
-            "SPACE: Launch",
-            "R: Reset",
-            "TAB: Next Object",
-            "Q/A: H-Angle +/-",
-            "W/S: V-Angle +/-",
-            "E/D: Force +/-",
-            "Mouse: Rotate View",
-            "Scroll: Zoom",
-            "Arrows: Pan",
-        ]
-        for control in controls:
-            self.draw_ui_text(control, x_offset, y_offset, (200, 200, 200), self.small_font)
-            y_offset -= 20
-            
-    def handle_input(self):
-        """Handle user input"""
-        keys = pygame.key.get_pressed()
-        
-        # Angle and force adjustments
-        if keys[pygame.K_q]:
-            self.launch_angle_h += 1
-            self.launch_angle_h = self.launch_angle_h % 360
-        if keys[pygame.K_a]:
-            self.launch_angle_h -= 1
-            self.launch_angle_h = self.launch_angle_h % 360
-        if keys[pygame.K_w]:
-            self.launch_angle_v += 0.5
-            self.launch_angle_v = min(90, self.launch_angle_v)
-        if keys[pygame.K_s]:
-            self.launch_angle_v -= 0.5
-            self.launch_angle_v = max(-90, self.launch_angle_v)
-        if keys[pygame.K_e]:
-            self.launch_force += 0.5
-            self.launch_force = min(200, self.launch_force)
-        if keys[pygame.K_d]:
-            self.launch_force -= 0.5
-            self.launch_force = max(1, self.launch_force)
-            
-        # Camera panning with arrow keys
-        pan_speed = 0.1
-        if keys[pygame.K_LEFT]:
-            self.camera.pan(-pan_speed, 0)
-        if keys[pygame.K_RIGHT]:
-            self.camera.pan(pan_speed, 0)
-        if keys[pygame.K_UP]:
-            self.camera.pan(0, -pan_speed)
-        if keys[pygame.K_DOWN]:
-            self.camera.pan(0, pan_speed)
-            
+    def handle_gui_events(self, event):
+        """Handle GUI events"""
+        if event.type == pygame_gui.UI_BUTTON_PRESSED:
+            if event.ui_element == self.launch_button and not self.is_simulating:
+                # Read values from GUI
+                try:
+                    self.launch_angle_h = float(self.h_angle_entry.get_text())
+                    self.launch_angle_v = float(self.v_angle_entry.get_text())
+                    self.launch_force = float(self.force_entry.get_text())
+                    
+                    # Clamp values
+                    self.launch_angle_h = self.launch_angle_h % 360
+                    self.launch_angle_v = max(-90, min(90, self.launch_angle_v))
+                    self.launch_force = max(1, min(200, self.launch_force))
+                    
+                    # Launch
+                    self.is_simulating = True
+                    self.current_object.is_being_dragged = False
+                    self.current_object.apply_force(
+                        self.launch_force,
+                        self.launch_angle_h,
+                        self.launch_angle_v
+                    )
+                except ValueError:
+                    pass  # Invalid input
+                    
+            elif event.ui_element == self.reset_button:
+                self.is_simulating = False
+                self.current_object.reset([0, 2, 0])
+                self.current_object.is_being_dragged = False
+                
+        elif event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
+            if event.ui_element == self.object_dropdown and not self.is_simulating:
+                # Find object type by name
+                selected_name = event.text
+                for obj_type, data in Object3D.OBJECTS.items():
+                    if data['name'] == selected_name:
+                        self.current_object = Object3D(obj_type)
+                        self.current_object.reset([0, 2, 0])
+                        break
+                        
+        elif event.type == pygame_gui.UI_HORIZONTAL_SLIDER_MOVED:
+            if event.ui_element == self.camera_speed_slider:
+                self.camera.speed = event.value
+                
     def run(self):
         """Main simulation loop"""
         running = True
@@ -497,60 +558,71 @@ class PhysicsSimulator:
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         running = False
-                    elif event.key == pygame.K_SPACE and not self.is_simulating:
-                        # Launch object
-                        self.is_simulating = True
-                        self.current_object.apply_force(
-                            self.launch_force, 
-                            self.launch_angle_h, 
-                            self.launch_angle_v
-                        )
-                    elif event.key == pygame.K_r:
-                        # Reset
-                        self.is_simulating = False
-                        self.current_object.reset([0, 2, 0])
-                    elif event.key == pygame.K_TAB:
-                        # Next object
-                        if not self.is_simulating:
-                            self.object_type_index = (self.object_type_index + 1) % len(self.object_types)
-                            self.current_object = Object3D(self.object_types[self.object_type_index])
-                            self.current_object.reset([0, 2, 0])
-                            
+                        
                 elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:  # Left click
-                        self.mouse_pressed = True
-                        self.last_mouse_pos = pygame.mouse.get_pos()
-                    elif event.button == 4:  # Scroll up
-                        self.camera.zoom(-0.5)
-                    elif event.button == 5:  # Scroll down
-                        self.camera.zoom(0.5)
+                    mouse_pos = pygame.mouse.get_pos()
+                    # Check if click is on GUI
+                    if mouse_pos[0] < self.width - 320:  # Not on GUI panel
+                        if event.button == 1:  # Left click - rotate camera
+                            self.camera_rotating = True
+                            self.last_mouse_pos = mouse_pos
+                        elif event.button == 3:  # Right click - drag object
+                            if self.is_mouse_over_object(mouse_pos) and not self.is_simulating:
+                                self.dragging_object = True
+                                self.current_object.is_being_dragged = True
+                                self.drag_plane_distance = np.linalg.norm(
+                                    self.current_object.position - self.camera.position
+                                )
+                        elif event.button == 4:  # Scroll up
+                            self.camera.zoom(-0.5)
+                        elif event.button == 5:  # Scroll down
+                            self.camera.zoom(0.5)
                         
                 elif event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1:
-                        self.mouse_pressed = False
+                        self.camera_rotating = False
+                    elif event.button == 3:
+                        self.dragging_object = False
+                        self.current_object.is_being_dragged = False
                         
                 elif event.type == pygame.MOUSEMOTION:
-                    if self.mouse_pressed:
+                    if self.camera_rotating:
                         mouse_pos = pygame.mouse.get_pos()
                         dx = mouse_pos[0] - self.last_mouse_pos[0]
                         dy = mouse_pos[1] - self.last_mouse_pos[1]
                         self.camera.rotate(dx * 0.3, -dy * 0.3)
                         self.last_mouse_pos = mouse_pos
+                    elif self.dragging_object:
+                        mouse_pos = pygame.mouse.get_pos()
+                        new_pos = self.get_3d_pos_from_mouse(mouse_pos, self.drag_plane_distance)
+                        self.current_object.position = new_pos
+                        self.current_object.trajectory = [self.current_object.position.copy()]
                         
-            # Handle continuous input
-            self.handle_input()
+                # Handle GUI events
+                self.gui_manager.process_events(event)
+                self.handle_gui_events(event)
+            
+            # Handle arrow key panning - FIXED TO USE PROPER DIRECTIONS
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_UP]:
+                self.camera.pan(1, 0)  # Forward
+            if keys[pygame.K_DOWN]:
+                self.camera.pan(-1, 0)  # Backward
+            if keys[pygame.K_LEFT]:
+                self.camera.pan(0, -1)  # Left
+            if keys[pygame.K_RIGHT]:
+                self.camera.pan(0, 1)  # Right
             
             # Update physics
             if self.is_simulating:
                 still_moving = self.current_object.update(dt)
                 if not still_moving:
                     self.is_simulating = False
-                    
-            # Get cursor 3D position
-            mouse_pos = pygame.mouse.get_pos()
-            self.cursor_3d_pos = self.get_cursor_3d_position(mouse_pos)
             
-            # Render
+            # Update GUI
+            self.gui_manager.update(dt)
+            
+            # Render 3D scene
             glClearColor(*COLORS['background'], 1)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             
@@ -558,13 +630,13 @@ class PhysicsSimulator:
             self.camera.apply()
             
             # Draw scene
-            self.draw_grid()
+            self.draw_infinite_grid()
             self.draw_axes()
             self.current_object.draw()
             self.current_object.draw_trajectory()
             
-            # Draw UI
-            self.draw_ui()
+            # Draw GUI overlay
+            self.gui_manager.draw_ui(self.display)
             
             pygame.display.flip()
             
