@@ -24,22 +24,29 @@ A physics simulation project featuring a 3D navigatable space with projectile mo
 
 ### Installation
 
+**IMPORTANT:** Version 2.0 requires pygame-gui. Make sure to install ALL dependencies!
+
 1. Install Python 3.8 or higher
 2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-### Run the Simulator
-
-**Option 1: Direct run**
+Or install individually:
 ```bash
-python simulator.py
+pip install pygame==2.5.2 PyOpenGL==3.1.7 numpy==1.26.3 pygame-gui==0.6.9
 ```
 
-**Option 2: Using quick start script** (checks dependencies)
+### Run the Simulator
+
+**Option 1: Using quick start script** (recommended - auto-checks dependencies)
 ```bash
 python start.py
+```
+
+**Option 2: Direct run**
+```bash
+python simulator.py
 ```
 
 ## Controls

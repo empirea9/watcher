@@ -18,7 +18,7 @@ def check_python_version():
 
 def check_dependencies():
     """Check if all required packages are installed"""
-    required = ['pygame', 'OpenGL', 'numpy']
+    required = ['pygame', 'OpenGL', 'numpy', 'pygame_gui']
     missing = []
     
     for package in required:
