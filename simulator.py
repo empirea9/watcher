@@ -310,6 +310,11 @@ class Camera:
         self.target[2] += (forward * forward_z + right * right_z) * self.speed
         
         self.update_position()
+    
+    def elevate(self, delta):
+        """Raise or lower camera elevation (Y axis)"""
+        self.target[1] += delta * self.speed
+        self.update_position()
 
 
 class PhysicsSimulator:
@@ -499,8 +504,8 @@ class PhysicsSimulator:
         
         # Info label
         self.info_label = pygame_gui.elements.UITextBox(
-            html_text='<font color="#CCCCCC" size="3"><b>Controls:</b><br>• Right-click: Drag object<br>• Left-click: Rotate camera<br>• Arrow keys: Pan camera<br>• Scroll: Zoom<br>• Q/A: H-Angle +/-<br>• W/S: V-Angle +/-</font>',
-            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, 140)),
+            html_text='<font color="#CCCCCC" size="3"><b>Controls:</b><br>• Right-click: Drag object<br>• Left-click: Rotate camera<br>• Arrow keys: Pan camera<br>• SPACE: Raise elevation<br>• L-SHIFT: Lower elevation<br>• Scroll: Zoom<br>• Q/A: H-Angle +/-<br>• W/S: V-Angle +/-</font>',
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, 170)),
             manager=self.gui_manager
         )
         
@@ -929,6 +934,12 @@ class PhysicsSimulator:
                 self.camera.pan(0, -1)  # Left
             if keys[pygame.K_RIGHT]:
                 self.camera.pan(0, 1)  # Right
+            
+            # SPACE and LEFT SHIFT for camera elevation
+            if keys[pygame.K_SPACE]:
+                self.camera.elevate(1)  # Raise elevation
+            if keys[pygame.K_LSHIFT]:
+                self.camera.elevate(-1)  # Lower elevation
             
             # Q/A keys for horizontal angle adjustment
             if keys[pygame.K_q]:
