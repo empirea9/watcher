@@ -217,13 +217,13 @@ class Camera:
         """Pan camera target - fixed to use proper forward/right movement"""
         yaw_rad = math.radians(self.yaw)
         
-        # Forward direction (based on yaw)
-        forward_x = math.cos(yaw_rad)
-        forward_z = math.sin(yaw_rad)
+        # Forward direction (based on yaw) - inverted for intuitive controls
+        forward_x = -math.cos(yaw_rad)
+        forward_z = -math.sin(yaw_rad)
         
         # Right direction (perpendicular to forward)
-        right_x = -math.sin(yaw_rad)
-        right_z = math.cos(yaw_rad)
+        right_x = math.sin(yaw_rad)
+        right_z = -math.cos(yaw_rad)
         
         # Apply movement with camera speed
         self.target[0] += (forward * forward_x + right * right_x) * self.speed
@@ -256,7 +256,7 @@ class PhysicsSimulator:
         self.camera = Camera()
         
         # GUI Manager
-        self.gui_manager = pygame_gui.UIManager((width, height), 'theme.json' if False else None)
+        self.gui_manager = pygame_gui.UIManager((width, height), 'theme.json')
         
         # Simulation state
         self.current_object = Object3D('football')
@@ -283,20 +283,29 @@ class PhysicsSimulator:
         self.create_gui()
         
     def create_gui(self):
-        """Create GUI controls"""
-        panel_width = 300
+        """Create GUI controls with sliders"""
+        panel_width = 320
         panel_x = self.width - panel_width - 10
         y_offset = 10
-        element_height = 35
-        spacing = 10
+        element_height = 30
+        spacing = 8
+        label_height = 25
+        
+        # Title
+        pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, 30)),
+            text='<b>PROJECTILE SIMULATOR</b>',
+            manager=self.gui_manager
+        )
+        y_offset += 40
         
         # Object selection dropdown
         pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, label_height)),
             text='Select Object:',
             manager=self.gui_manager
         )
-        y_offset += element_height + 5
+        y_offset += label_height + 3
         
         self.object_dropdown = pygame_gui.elements.UIDropDownMenu(
             options_list=[Object3D.OBJECTS[k]['name'] for k in self.object_types],
@@ -304,15 +313,23 @@ class PhysicsSimulator:
             relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
             manager=self.gui_manager
         )
-        y_offset += element_height + spacing
+        y_offset += element_height + spacing + 5
         
-        # Horizontal angle input
+        # Horizontal angle with slider and text input
         pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, label_height)),
             text='Horizontal Angle (0-360°):',
             manager=self.gui_manager
         )
-        y_offset += element_height + 5
+        y_offset += label_height + 3
+        
+        self.h_angle_slider = pygame_gui.elements.UIHorizontalSlider(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            start_value=45.0,
+            value_range=(0.0, 360.0),
+            manager=self.gui_manager
+        )
+        y_offset += element_height + 3
         
         self.h_angle_entry = pygame_gui.elements.UITextEntryLine(
             relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
@@ -321,13 +338,21 @@ class PhysicsSimulator:
         self.h_angle_entry.set_text('45.0')
         y_offset += element_height + spacing
         
-        # Vertical angle input
+        # Vertical angle with slider and text input
         pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, label_height)),
             text='Vertical Angle (-90 to 90°):',
             manager=self.gui_manager
         )
-        y_offset += element_height + 5
+        y_offset += label_height + 3
+        
+        self.v_angle_slider = pygame_gui.elements.UIHorizontalSlider(
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            start_value=45.0,
+            value_range=(-90.0, 90.0),
+            manager=self.gui_manager
+        )
+        y_offset += element_height + 3
         
         self.v_angle_entry = pygame_gui.elements.UITextEntryLine(
             relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
@@ -338,11 +363,11 @@ class PhysicsSimulator:
         
         # Force input
         pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, label_height)),
             text='Launch Force (1-200 N):',
             manager=self.gui_manager
         )
-        y_offset += element_height + 5
+        y_offset += label_height + 3
         
         self.force_entry = pygame_gui.elements.UITextEntryLine(
             relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
@@ -353,11 +378,11 @@ class PhysicsSimulator:
         
         # Camera speed slider
         pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, label_height)),
             text='Camera Speed:',
             manager=self.gui_manager
         )
-        y_offset += element_height + 5
+        y_offset += label_height + 3
         
         self.camera_speed_slider = pygame_gui.elements.UIHorizontalSlider(
             relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height)),
@@ -365,28 +390,28 @@ class PhysicsSimulator:
             value_range=(0.1, 2.0),
             manager=self.gui_manager
         )
-        y_offset += element_height + spacing
+        y_offset += element_height + spacing + 5
         
         # Launch button
         self.launch_button = pygame_gui.elements.UIButton(
-            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height + 5)),
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, 40)),
             text='LAUNCH',
             manager=self.gui_manager
         )
-        y_offset += element_height + spacing + 5
+        y_offset += 45
         
         # Reset button
         self.reset_button = pygame_gui.elements.UIButton(
-            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, element_height + 5)),
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, 40)),
             text='RESET',
             manager=self.gui_manager
         )
-        y_offset += element_height + spacing + 5
+        y_offset += 50
         
         # Info label
         self.info_label = pygame_gui.elements.UITextBox(
-            html_text='<font color="#FFFFFF">Drag object with Right Click<br>Rotate camera with Left Click<br>Arrow keys to pan<br>Scroll to zoom</font>',
-            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, 100)),
+            html_text='<font color="#CCCCCC" size="3"><b>Controls:</b><br>• Right-click: Drag object<br>• Left-click: Rotate camera<br>• Arrow keys: Pan camera<br>• Scroll: Zoom<br>• Q/A: H-Angle +/-<br>• W/S: V-Angle +/-</font>',
+            relative_rect=pygame.Rect((panel_x, y_offset), (panel_width, 140)),
             manager=self.gui_manager
         )
         
@@ -543,6 +568,33 @@ class PhysicsSimulator:
         elif event.type == pygame_gui.UI_HORIZONTAL_SLIDER_MOVED:
             if event.ui_element == self.camera_speed_slider:
                 self.camera.speed = event.value
+            elif event.ui_element == self.h_angle_slider:
+                # Update text entry when slider moves
+                self.launch_angle_h = event.value
+                self.h_angle_entry.set_text(f'{event.value:.1f}')
+            elif event.ui_element == self.v_angle_slider:
+                # Update text entry when slider moves
+                self.launch_angle_v = event.value
+                self.v_angle_entry.set_text(f'{event.value:.1f}')
+                
+        elif event.type == pygame_gui.UI_TEXT_ENTRY_FINISHED:
+            # Update sliders when text entry changes
+            if event.ui_element == self.h_angle_entry:
+                try:
+                    value = float(event.text)
+                    value = value % 360
+                    self.h_angle_slider.set_current_value(value)
+                    self.launch_angle_h = value
+                except ValueError:
+                    pass
+            elif event.ui_element == self.v_angle_entry:
+                try:
+                    value = float(event.text)
+                    value = max(-90, min(90, value))
+                    self.v_angle_slider.set_current_value(value)
+                    self.launch_angle_v = value
+                except ValueError:
+                    pass
                 
     def run(self):
         """Main simulation loop"""
@@ -602,8 +654,10 @@ class PhysicsSimulator:
                 self.gui_manager.process_events(event)
                 self.handle_gui_events(event)
             
-            # Handle arrow key panning - FIXED TO USE PROPER DIRECTIONS
+            # Handle arrow key panning and angle keyboard controls
             keys = pygame.key.get_pressed()
+            
+            # Arrow keys for camera panning
             if keys[pygame.K_UP]:
                 self.camera.pan(1, 0)  # Forward
             if keys[pygame.K_DOWN]:
@@ -612,6 +666,26 @@ class PhysicsSimulator:
                 self.camera.pan(0, -1)  # Left
             if keys[pygame.K_RIGHT]:
                 self.camera.pan(0, 1)  # Right
+            
+            # Q/A keys for horizontal angle adjustment
+            if keys[pygame.K_q]:
+                self.launch_angle_h = (self.launch_angle_h + 1) % 360
+                self.h_angle_slider.set_current_value(self.launch_angle_h)
+                self.h_angle_entry.set_text(f'{self.launch_angle_h:.1f}')
+            if keys[pygame.K_a]:
+                self.launch_angle_h = (self.launch_angle_h - 1) % 360
+                self.h_angle_slider.set_current_value(self.launch_angle_h)
+                self.h_angle_entry.set_text(f'{self.launch_angle_h:.1f}')
+            
+            # W/S keys for vertical angle adjustment
+            if keys[pygame.K_w]:
+                self.launch_angle_v = min(90, self.launch_angle_v + 0.5)
+                self.v_angle_slider.set_current_value(self.launch_angle_v)
+                self.v_angle_entry.set_text(f'{self.launch_angle_v:.1f}')
+            if keys[pygame.K_s]:
+                self.launch_angle_v = max(-90, self.launch_angle_v - 0.5)
+                self.v_angle_slider.set_current_value(self.launch_angle_v)
+                self.v_angle_entry.set_text(f'{self.launch_angle_v:.1f}')
             
             # Update physics
             if self.is_simulating:

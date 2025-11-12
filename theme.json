@@ -1,0 +1,93 @@
+{
+    "defaults":
+    {
+        "colours":
+        {
+            "normal_bg": "#252525",
+            "hovered_bg": "#353535",
+            "disabled_bg": "#252525",
+            "selected_bg": "#193754",
+            "dark_bg": "#151515",
+            "normal_text": "#FFFFFF",
+            "hovered_text": "#FFFFFF",
+            "selected_text": "#FFFFFF",
+            "disabled_text": "#6d6d6d",
+            "link_text": "#4C9BE8",
+            "link_hover": "#5CABF7",
+            "link_selected": "#4C9BE8",
+            "text_shadow": "#000000",
+            "normal_border": "#505050",
+            "hovered_border": "#707070",
+            "disabled_border": "#505050",
+            "selected_border": "#5CABF7",
+            "active_border": "#5CABF7",
+            "filled_bar": "#4C9BE8",
+            "unfilled_bar": "#353535"
+        }
+    },
+    "horizontal_slider":
+    {
+        "colours":
+        {
+            "normal_bg": "#252525",
+            "hovered_bg": "#353535",
+            "disabled_bg": "#252525",
+            "selected_bg": "#4C9BE8",
+            "active_bg": "#5CABF7",
+            "dark_bg": "#151515",
+            "normal_border": "#505050",
+            "hovered_border": "#707070",
+            "disabled_border": "#505050",
+            "selected_border": "#5CABF7",
+            "active_border": "#5CABF7"
+        }
+    },
+    "horizontal_slider.button":
+    {
+        "colours":
+        {
+            "normal_bg": "#4C9BE8",
+            "hovered_bg": "#5CABF7",
+            "disabled_bg": "#505050",
+            "selected_bg": "#5CABF7",
+            "active_bg": "#5CABF7"
+        }
+    },
+    "button":
+    {
+        "colours":
+        {
+            "normal_bg": "#252525",
+            "hovered_bg": "#4C9BE8",
+            "disabled_bg": "#252525",
+            "selected_bg": "#4C9BE8",
+            "active_bg": "#5CABF7",
+            "normal_text": "#FFFFFF",
+            "hovered_text": "#FFFFFF",
+            "selected_text": "#FFFFFF",
+            "disabled_text": "#6d6d6d"
+        }
+    },
+    "text_entry_line":
+    {
+        "colours":
+        {
+            "dark_bg": "#151515",
+            "normal_text": "#FFFFFF",
+            "selected_text": "#FFFFFF",
+            "selected_bg": "#4C9BE8"
+        }
+    },
+    "drop_down_menu":
+    {
+        "colours":
+        {
+            "normal_bg": "#252525",
+            "hovered_bg": "#353535",
+            "selected_bg": "#4C9BE8",
+            "normal_text": "#FFFFFF",
+            "hovered_text": "#FFFFFF",
+            "selected_text": "#FFFFFF"
+        }
+    }
+}
