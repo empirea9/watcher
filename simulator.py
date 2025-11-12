@@ -58,8 +58,10 @@ class Object3D:
         self.rotation = np.array([0.0, 0.0, 0.0])
         self.angular_velocity = np.array([0.0, 0.0, 0.0])
         
-        # Trajectory tracking
+        # Trajectory tracking with time and velocity
         self.trajectory = []
+        self.trajectory_data = []  # Stores (position, velocity, time)
+        self.simulation_time = 0.0
         
         # Drag state
         self.is_being_dragged = False
@@ -71,6 +73,8 @@ class Object3D:
         self.rotation = np.array([0.0, 0.0, 0.0])
         self.angular_velocity = np.array([0.0, 0.0, 0.0])
         self.trajectory = [self.position.copy()]
+        self.trajectory_data = [(self.position.copy(), self.velocity.copy(), 0.0)]
+        self.simulation_time = 0.0
         
     def apply_force(self, force_magnitude, angle_horizontal, angle_vertical):
         """Apply force to object at specified angles"""
@@ -99,9 +103,13 @@ class Object3D:
         # Update rotation
         self.rotation += self.angular_velocity * dt
         
-        # Store trajectory point
+        # Update simulation time
+        self.simulation_time += dt
+        
+        # Store trajectory point with time and velocity data
         if len(self.trajectory) == 0 or np.linalg.norm(self.position - self.trajectory[-1]) > 0.1:
             self.trajectory.append(self.position.copy())
+            self.trajectory_data.append((self.position.copy(), self.velocity.copy(), self.simulation_time))
         
         # Check if object hit ground
         if self.position[1] < 0:
@@ -169,6 +177,74 @@ class Object3D:
             glVertex3fv(point)
         glEnd()
         glLineWidth(1.0)
+        
+    def draw_velocity_arrows(self):
+        """Draw velocity arrows showing horizontal and vertical components"""
+        if self.is_being_dragged or np.linalg.norm(self.velocity) < 0.1:
+            return
+            
+        glPushMatrix()
+        glTranslatef(self.position[0], self.position[1], self.position[2])
+        
+        # Lighter shade for velocity arrows (semi-transparent)
+        arrow_length_scale = 0.5
+        
+        # Horizontal velocity (XZ plane)
+        v_horizontal = np.array([self.velocity[0], 0, self.velocity[2]])
+        h_mag = np.linalg.norm(v_horizontal)
+        if h_mag > 0.1:
+            h_dir = v_horizontal / h_mag
+            h_length = h_mag * arrow_length_scale
+            
+            glColor4f(1.0, 0.8, 0.2, 0.7)  # Yellow-ish, lighter
+            glLineWidth(2.5)
+            glBegin(GL_LINES)
+            glVertex3f(0, 0, 0)
+            glVertex3f(h_dir[0] * h_length, 0, h_dir[2] * h_length)
+            glEnd()
+            
+            # Arrow head for horizontal
+            self._draw_arrow_head(h_dir[0] * h_length, 0, h_dir[2] * h_length, h_dir, 0.2)
+        
+        # Vertical velocity (Y axis)
+        v_mag = abs(self.velocity[1])
+        if v_mag > 0.1:
+            v_length = self.velocity[1] * arrow_length_scale
+            v_dir = 1 if self.velocity[1] > 0 else -1
+            
+            glColor4f(0.2, 1.0, 0.4, 0.7)  # Green-ish, lighter
+            glLineWidth(2.5)
+            glBegin(GL_LINES)
+            glVertex3f(0, 0, 0)
+            glVertex3f(0, v_length, 0)
+            glEnd()
+            
+            # Arrow head for vertical
+            self._draw_arrow_head(0, v_length, 0, np.array([0, v_dir, 0]), 0.2)
+        
+        glLineWidth(1.0)
+        glPopMatrix()
+        
+    def _draw_arrow_head(self, x, y, z, direction, size):
+        """Draw an arrow head at the specified position"""
+        # Simple cone for arrow head
+        glPushMatrix()
+        glTranslatef(x, y, z)
+        
+        # Rotate to point in the direction
+        if direction[1] != 0:  # Vertical arrow
+            angle = 0 if direction[1] > 0 else 180
+            glRotatef(angle, 1, 0, 0)
+        else:  # Horizontal arrow
+            angle = math.degrees(math.atan2(direction[2], direction[0]))
+            glRotatef(angle, 0, 1, 0)
+            glRotatef(90, 0, 0, 1)
+        
+        quadric = gluNewQuadric()
+        gluCylinder(quadric, size, 0, size * 2, 8, 8)
+        gluDeleteQuadric(quadric)
+        
+        glPopMatrix()
 
 
 class Camera:
@@ -272,6 +348,10 @@ class PhysicsSimulator:
         self.launch_angle_h = 45.0
         self.launch_angle_v = 45.0
         self.launch_force = 20.0
+        
+        # Timeline state
+        self.timeline_scrubbing = False
+        self.timeline_position = 0.0  # 0.0 to 1.0
         
         # Mouse control for camera
         self.camera_rotating = False
@@ -450,8 +530,14 @@ class PhysicsSimulator:
         
         glEnd()
         
-    def draw_axes(self, length=5):
-        """Draw coordinate axes"""
+    def draw_axes(self, length=5, position=None):
+        """Draw coordinate axes at specified position or origin"""
+        if position is None:
+            position = [0, 0, 0]
+            
+        glPushMatrix()
+        glTranslatef(position[0], position[1], position[2])
+        
         glLineWidth(3.0)
         
         # X axis - Red
@@ -476,6 +562,7 @@ class PhysicsSimulator:
         glEnd()
         
         glLineWidth(1.0)
+        glPopMatrix()
         
     def get_3d_pos_from_mouse(self, mouse_pos, distance):
         """Convert 2D mouse position to 3D world coordinates at a specific distance"""
@@ -600,6 +687,65 @@ class PhysicsSimulator:
                     self.launch_angle_v = value
                 except ValueError:
                     pass
+    
+    def draw_timeline(self):
+        """Draw timeline UI at the bottom of the screen to scrub through trajectory"""
+        if len(self.current_object.trajectory_data) < 2:
+            return
+        
+        # Timeline dimensions
+        timeline_height = 60
+        timeline_y = self.height - timeline_height
+        timeline_margin = 20
+        timeline_width = self.width - 2 * timeline_margin
+        timeline_x = timeline_margin
+        
+        # Draw on GUI surface (2D overlay)
+        import pygame.draw as draw
+        
+        # Draw timeline background (dark bar)
+        timeline_rect = pygame.Rect(timeline_x, timeline_y, timeline_width, timeline_height)
+        draw.rect(self.gui_surface, (10, 10, 10, 200), timeline_rect)
+        draw.rect(self.gui_surface, (50, 50, 50), timeline_rect, 2)
+        
+        # Draw trajectory points as dots
+        max_time = self.current_object.trajectory_data[-1][2] if len(self.current_object.trajectory_data) > 0 else 1.0
+        for i, (pos, vel, time) in enumerate(self.current_object.trajectory_data):
+            if max_time > 0:
+                x_pos = timeline_x + int((time / max_time) * timeline_width)
+                y_pos = timeline_y + timeline_height // 2
+                
+                # Color based on velocity magnitude
+                vel_mag = np.linalg.norm(vel)
+                color_intensity = min(255, int(vel_mag * 10))
+                draw.circle(self.gui_surface, (color_intensity, 100, 255 - color_intensity), (x_pos, y_pos), 3)
+        
+        # Draw current position marker
+        if not self.is_simulating and len(self.current_object.trajectory_data) > 1:
+            current_time = self.current_object.simulation_time
+            if max_time > 0:
+                marker_x = timeline_x + int((current_time / max_time) * timeline_width)
+                marker_y = timeline_y
+                # Draw vertical line marker
+                draw.line(self.gui_surface, (255, 255, 0), (marker_x, marker_y), (marker_x, marker_y + timeline_height), 3)
+                
+                # Find closest trajectory point for velocity display
+                closest_idx = 0
+                closest_dist = float('inf')
+                for i, (pos, vel, time) in enumerate(self.current_object.trajectory_data):
+                    dist = abs(time - current_time)
+                    if dist < closest_dist:
+                        closest_dist = dist
+                        closest_idx = i
+                
+                if closest_idx < len(self.current_object.trajectory_data):
+                    _, vel, _ = self.current_object.trajectory_data[closest_idx]
+                    vel_mag = np.linalg.norm(vel)
+                    
+                    # Display velocity text
+                    font = pygame.font.Font(None, 24)
+                    vel_text = font.render(f"v={vel_mag:.2f} m/s  t={current_time:.2f}s", True, (255, 255, 255))
+                    self.gui_surface.blit(vel_text, (timeline_x + 10, timeline_y + 5))
                 
     def run(self):
         """Main simulation loop"""
@@ -710,8 +856,10 @@ class PhysicsSimulator:
             
             # Draw 3D scene
             self.draw_infinite_grid()
-            self.draw_axes()
+            self.draw_axes()  # Origin axes
+            self.draw_axes(length=2, position=self.current_object.position)  # Axes at object position
             self.current_object.draw()
+            self.current_object.draw_velocity_arrows()
             self.current_object.draw_trajectory()
             
             # Now render GUI on top
@@ -720,6 +868,9 @@ class PhysicsSimulator:
             
             # Draw GUI to the surface
             self.gui_manager.draw_ui(self.gui_surface)
+            
+            # Draw timeline overlay
+            self.draw_timeline()
             
             # Convert pygame surface to OpenGL texture and draw it
             # Switch to 2D orthographic projection
@@ -745,13 +896,13 @@ class PhysicsSimulator:
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self.width, self.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data)
             
-            # Draw textured quad
+            # Draw textured quad (fix inverted rendering by flipping V coordinate)
             glColor4f(1, 1, 1, 1)
             glBegin(GL_QUADS)
-            glTexCoord2f(0, 0); glVertex2f(0, 0)
-            glTexCoord2f(1, 0); glVertex2f(self.width, 0)
-            glTexCoord2f(1, 1); glVertex2f(self.width, self.height)
-            glTexCoord2f(0, 1); glVertex2f(0, self.height)
+            glTexCoord2f(0, 1); glVertex2f(0, 0)
+            glTexCoord2f(1, 1); glVertex2f(self.width, 0)
+            glTexCoord2f(1, 0); glVertex2f(self.width, self.height)
+            glTexCoord2f(0, 0); glVertex2f(0, self.height)
             glEnd()
             
             # Cleanup

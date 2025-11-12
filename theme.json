@@ -3,43 +3,43 @@
     {
         "colours":
         {
-            "normal_bg": "#252525",
-            "hovered_bg": "#353535",
-            "disabled_bg": "#252525",
-            "selected_bg": "#193754",
-            "dark_bg": "#151515",
-            "normal_text": "#FFFFFF",
-            "hovered_text": "#FFFFFF",
-            "selected_text": "#FFFFFF",
-            "disabled_text": "#6d6d6d",
+            "normal_bg": "#0d0d0d",
+            "hovered_bg": "#1a1a1a",
+            "disabled_bg": "#0d0d0d",
+            "selected_bg": "#1a3a5a",
+            "dark_bg": "#000000",
+            "normal_text": "#cccccc",
+            "hovered_text": "#ffffff",
+            "selected_text": "#ffffff",
+            "disabled_text": "#555555",
             "link_text": "#4C9BE8",
             "link_hover": "#5CABF7",
             "link_selected": "#4C9BE8",
             "text_shadow": "#000000",
-            "normal_border": "#505050",
-            "hovered_border": "#707070",
-            "disabled_border": "#505050",
-            "selected_border": "#5CABF7",
-            "active_border": "#5CABF7",
+            "normal_border": "#2a2a2a",
+            "hovered_border": "#3a3a3a",
+            "disabled_border": "#2a2a2a",
+            "selected_border": "#4C9BE8",
+            "active_border": "#4C9BE8",
             "filled_bar": "#4C9BE8",
-            "unfilled_bar": "#353535"
+            "unfilled_bar": "#1a1a1a"
         }
     },
     "horizontal_slider":
     {
         "colours":
         {
-            "normal_bg": "#252525",
-            "hovered_bg": "#353535",
-            "disabled_bg": "#252525",
+            "normal_bg": "#0d0d0d",
+            "hovered_bg": "#1a1a1a",
+            "disabled_bg": "#0d0d0d",
             "selected_bg": "#4C9BE8",
             "active_bg": "#5CABF7",
-            "dark_bg": "#151515",
-            "normal_border": "#505050",
-            "hovered_border": "#707070",
-            "disabled_border": "#505050",
-            "selected_border": "#5CABF7",
-            "active_border": "#5CABF7"
+            "dark_bg": "#000000",
+            "normal_border": "#2a2a2a",
+            "hovered_border": "#3a3a3a",
+            "disabled_border": "#2a2a2a",
+            "selected_border": "#4C9BE8",
+            "active_border": "#4C9BE8"
         }
     },
     "horizontal_slider.button":
@@ -48,7 +48,7 @@
         {
             "normal_bg": "#4C9BE8",
             "hovered_bg": "#5CABF7",
-            "disabled_bg": "#505050",
+            "disabled_bg": "#2a2a2a",
             "selected_bg": "#5CABF7",
             "active_bg": "#5CABF7"
         }
@@ -57,24 +57,24 @@
     {
         "colours":
         {
-            "normal_bg": "#252525",
+            "normal_bg": "#0d0d0d",
             "hovered_bg": "#4C9BE8",
-            "disabled_bg": "#252525",
+            "disabled_bg": "#0d0d0d",
             "selected_bg": "#4C9BE8",
             "active_bg": "#5CABF7",
-            "normal_text": "#FFFFFF",
-            "hovered_text": "#FFFFFF",
-            "selected_text": "#FFFFFF",
-            "disabled_text": "#6d6d6d"
+            "normal_text": "#cccccc",
+            "hovered_text": "#ffffff",
+            "selected_text": "#ffffff",
+            "disabled_text": "#555555"
         }
     },
     "text_entry_line":
     {
         "colours":
         {
-            "dark_bg": "#151515",
-            "normal_text": "#FFFFFF",
-            "selected_text": "#FFFFFF",
+            "dark_bg": "#000000",
+            "normal_text": "#cccccc",
+            "selected_text": "#ffffff",
             "selected_bg": "#4C9BE8"
         }
     },
@@ -82,12 +82,12 @@
     {
         "colours":
         {
-            "normal_bg": "#252525",
-            "hovered_bg": "#353535",
+            "normal_bg": "#0d0d0d",
+            "hovered_bg": "#1a1a1a",
             "selected_bg": "#4C9BE8",
-            "normal_text": "#FFFFFF",
-            "hovered_text": "#FFFFFF",
-            "selected_text": "#FFFFFF"
+            "normal_text": "#cccccc",
+            "hovered_text": "#ffffff",
+            "selected_text": "#ffffff"
         }
     }
 }
