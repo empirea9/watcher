@@ -2,17 +2,22 @@
 
 A physics simulation project featuring a 3D navigatable space with projectile motion. Built with a dark, minimalistic aesthetic using black, white, gray, blue, and yellow as primary colors.
 
+**🎉 NEW in Version 2.0:** Object dragging, GUI controls, infinite grid, and enhanced camera!
+
 ## Features
 
 - **3D Navigatable Space**: Fully interactive 3D environment with movable camera
+- **Object Dragging**: Right-click to drag objects anywhere in 3D space ✨ NEW
+- **GUI Controls**: Professional UI with dropdowns, text inputs, and sliders ✨ NEW
+- **Infinite Grid**: Dynamically generated grid that extends infinitely ✨ NEW
+- **Enhanced Camera**: Adjustable speed (0.1-2.0x) with fixed arrow key panning ✨ NEW
 - **Multiple Objects**: Various 3D objects with predefined masses including:
   - Balls: Football, Basketball, Baseball
   - Cubes: Small and Large
   - Projectiles: Spears, Arrows, Bullets
 - **Physics Simulation**: Realistic projectile motion with gravity
 - **Trajectory Visualization**: Real-time trajectory path display
-- **Customizable Launch**: Adjust angle (horizontal and vertical) and force
-- **Cursor Tracking**: 3D coordinates displayed in the UI panel
+- **Customizable Launch**: Adjust angle (horizontal and vertical) and force via GUI
 - **Dark Aesthetic Theme**: Minimalistic design with carefully chosen color scheme
 
 ## Quick Start
@@ -39,19 +44,26 @@ python start.py
 
 ## Controls
 
-- **SPACE**: Launch the object with current settings
-- **R**: Reset the simulation
-- **TAB**: Switch to next object type
-- **Q/A**: Adjust horizontal angle (+/-)
-- **W/S**: Adjust vertical angle (+/-)
-- **E/D**: Adjust launch force (+/-)
-- **Mouse Drag**: Rotate camera view
-- **Mouse Scroll**: Zoom in/out
-- **Arrow Keys**: Pan camera target
+### Mouse
+- **Left Click + Drag**: Rotate camera view
+- **Right Click + Drag**: Move object to any position ✨ NEW
+- **Scroll Wheel**: Zoom in/out
+
+### Keyboard
+- **Arrow Keys**: Pan camera (UP=forward, DOWN=back, LEFT=left, RIGHT=right) ✨ FIXED
 - **ESC**: Exit application
+
+### GUI Controls ✨ NEW
+- **Object Dropdown**: Select from 8 different objects
+- **Angle Inputs**: Enter horizontal (0-360°) and vertical (-90 to 90°) angles
+- **Force Input**: Enter launch force (1-200 N)
+- **Camera Speed Slider**: Adjust camera movement speed
+- **LAUNCH Button**: Fire the projectile
+- **RESET Button**: Reset simulation
 
 ## Documentation
 
+- **[CHANGELOG.md](CHANGELOG.md)** - Version 2.0 changes and improvements ✨ NEW
 - **[USER_GUIDE.md](USER_GUIDE.md)** - Comprehensive user manual with examples
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture and design details
 - **[FEATURES.md](FEATURES.md)** - Complete features showcase
@@ -88,6 +100,7 @@ watcher/
 - pygame 2.5.2
 - PyOpenGL 3.1.7
 - numpy 1.26.3
+- pygame-gui 0.6.9 ✨ NEW
 
 ## Testing
 
